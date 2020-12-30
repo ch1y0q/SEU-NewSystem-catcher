@@ -37,12 +37,14 @@ Logintoken=None
 electiveBatchCode=None
 nBatch=None
 dlg = None
+usedInfo = None
 
 listbox1=None
 listbox2=None
 listbox3=None
 listbox4=None
 listbox5=None
+listbox6=None
 pool1 = None
 pool2 = None
 pool3 = None
@@ -64,7 +66,8 @@ list_humanity_selecting = []
 list_science_selecting = []
 list_economics_selecting = []
 list_sports_selecting= []
-
+list_running = []
+list_finished = []
 # 已选择课程的数量
 selected_num = 0
 
@@ -158,13 +161,13 @@ class LoginDialog(Toplevel):
     #初始化登录界面，正常运行
     def __init__(self, parent, title=None):
         Toplevel.__init__(self, parent)
-
+        global usedInfo
         self.transient(parent)
         if title:
             self.title(title)
 
         self.parent = parent
-
+        var=IntVar()
         self.result = None
 
         Label(self, text="用户名").grid(sticky=E, padx=5, pady=10)
@@ -172,7 +175,7 @@ class LoginDialog(Toplevel):
         Label(self, text="批次(0到n的整数)").grid(sticky=E, pady=10)
         Label(self, text="验证码").grid(sticky=E, pady=10)
         self.edit_username = Entry(self)
-        self.edit_password = Entry(self)
+        self.edit_password = Entry(self,show = '*')
         self.edit_nBatch = Entry(self)
         self.edit_vercode = Entry(self)
         self.edit_username.grid(row=0, column=1, columnspan='2')
@@ -189,13 +192,17 @@ class LoginDialog(Toplevel):
         self.label.image = img_bg
         self.label.grid(row=4, column=1, columnspan='2')
 
+
         # 点击提交则验证登录并销毁登录界面
         self.btn_submit = Button(self, text='   提交   ', command=lambda: self.destroy())
         self.btn_submit.grid(row=4, column=0, padx=10, pady=5)
-
+        usedInfo = BooleanVar()
+        usedInfo.set(True)
+        self.btn_used = Checkbutton(self,text='是否使用已有信息',variable=usedInfo)
+        self.btn_used.grid(row=5, column=1, columnspan='2',sticky=W)
         self.grab_set()
 
-        self.geometry('250x220+500+200')
+        self.geometry('300x260+500+200')
 
         self.resizable(width=False, height=False)
         self.wait_window(self)
@@ -212,10 +219,24 @@ class LoginDialog(Toplevel):
         global password
         global vercode
         global nBatch
+        global usedInfo
+        
         username = self.edit_username.get()
         password = self.edit_password.get()
         vercode = self.edit_vercode.get()
         nBatch = self.edit_nBatch.get()
+        if usedInfo.get() == True:
+            f=open("userInfo.txt","r")
+            username = f.readline().strip('\n')
+            password = f.readline().strip('\n')
+            nBatch = f.readline().strip('\n')
+            print(username)
+            print(password)
+        else:
+            f=open("userInfo.txt","w")
+            f.write(username)
+            f.write(password)
+            f.write(nBatch)
         root.event_generate("<<EVENT_LOGIN>>")
         self.init_data()
         pass
@@ -469,8 +490,9 @@ class LoginDialog(Toplevel):
             req6 = urllib.request.Request(url6, postdata, headers=header6)
             response6 = urllib.request.urlopen(req6, timeout=12)
             content6 = response6.read().decode('utf-8')
+            print(content6)
             print("体育课拉取完毕")
-            JsonParse(list_sports, content6)
+            TYJsonParse(list_sports, content6)
             if dispaly_flag_sports == 1:
                 root.event_generate("<<UPDATE_SPORTS_LIST>>")
                 dispaly_flag_sports = 0
@@ -544,6 +566,32 @@ def GJsonParse(datalist, StrJson):
 
     print("公选课json解析完毕")
 
+#体育Json
+def TYJsonParse(datalist, StrJson):
+    print("正在进行体育课Json数据的解析")
+    # 清空现有记录
+    #清空现有记录
+    del datalist[:]
+    #datalist = []
+    jsonObject = json.loads(StrJson)
+    totalCount = jsonObject['totalCount']
+    for i in range(0,int(totalCount)):
+        str_select = str(jsonObject['dataList'][i]['selected'])
+        if str_select == "False":
+            for j in range(0, int(jsonObject['dataList'][i]['number'])):
+                classData = dict(courseName=jsonObject['dataList'][i]['courseName'])
+                classData['isFull'] =str(jsonObject['dataList'][i]['tcList'][j]['isFull'])
+                classData['isConflict'] = str(jsonObject['dataList'][i]['tcList'][j]['isConflict'])
+                classData['teachingClassID'] =str(jsonObject['dataList'][i]['tcList'][j]['teachingClassID'])
+                classData['isChoose'] = str(jsonObject['dataList'][i]['tcList'][j]['isChoose'])
+                classData['teacherName'] = str(jsonObject['dataList'][i]['tcList'][j]['teacherName'])
+                classData['teachingPlace'] = str(jsonObject['dataList'][i]['tcList'][j]['teachingPlace'])
+                classData['courseName'] = str(jsonObject['dataList'][i]['tcList'][j]['sportName'])
+                datalist.append(classData)
+    print(datalist)
+
+    print("体育课json解析完毕")
+
 #判断进度条
 def login_update(self):
     global progress_bar
@@ -573,7 +621,7 @@ def login_start(self):
     global progressLabel
     progress_var = DoubleVar()
     labelfont = ('times', 40, 'bold')
-    progressLabel = Label(root, text="如果本页面长时未刷新\n请重启程序并确认账号密码验证码正确性\n反正不关我们事", pady=110)
+    progressLabel = Label(root, text="如果本页面长时未刷新\n请重启程序并确认账号密码验证码正确性\n", pady=110)
     progressLabel.config(font=labelfont)
     progressLabel.pack()
     progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
@@ -594,7 +642,7 @@ def update_institute(args):
     global listbox1
     print("推荐课程正在更新列表")
     print(list_recommend.__len__())
-    listbox1.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表，祝好运。")
+    listbox1.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表")
     for i in range(0, list_recommend.__len__()):
         # print 'institute '+str(i)+str(list_institute[i][0])
         data=str(list_recommend[i]['courseName'])+" "+str(list_recommend[i]['teacherName'])+" "+str(list_recommend[i]['teachingPlace'])
@@ -604,7 +652,7 @@ def update_humanity(args):
     global list_humanity
     global listbox2
     print("人文课正在更新列表")
-    listbox2.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表，祝好运。")
+    listbox2.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表")
     for i in range(0, list_humanity.__len__()):
         # print 'institute '+str(i)+str(list_humanity[i][0])
         data=str(list_humanity[i]['courseName'])+" "+str(list_humanity[i]['teacherName'])+" "+str(list_humanity[i]['teachingPlace'])
@@ -614,7 +662,7 @@ def update_science(args):
     global list_science
     global listbox3
     print ("社会科学课正在更新列表")
-    listbox3.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表，祝好运。")
+    listbox3.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表")
     for i in range(0, list_science.__len__()):
         data=str(list_science[i]['courseName'])+" "+str(list_science[i]['teacherName'])+" "+str(list_science[i]['teachingPlace'])
         listbox3.insert(END,data)
@@ -623,7 +671,7 @@ def update_economy(args):
     global list_economics
     global listbox4
     print ("经管课正在更新列表")
-    listbox4.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表，祝好运。")
+    listbox4.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表")
     for i in range(0, list_economics.__len__()):
         data=str(list_economics[i]['courseName'])+" "+str(list_economics[i]['teacherName'])+" "+str(list_economics[i]['teachingPlace'])
         listbox4.insert(END, data)
@@ -632,7 +680,7 @@ def update_sports(args):
     global list_sports
     global listbox5
     print ("体育课正在更新列表")
-    listbox5.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表，祝好运。")
+    listbox5.insert(END, "点击选中课程后点右上【开始所选】按钮即可开始刷该门课程，请用鼠标滚轮来滑动列表")
     for i in range(0, list_sports.__len__()):
         data=str(list_sports[i]['courseName'])+" "+str(list_sports[i]['teacherName'])+" "+str(list_sports[i]['teachingPlace'])
         listbox5.insert(END,data)
@@ -652,6 +700,7 @@ def about():
     dialog.geometry('280x190+360+300')
     dialog.title('关于本软件')
     Label(dialog, text="东南大学新系统选课助手\n1.0测试版\n\n严禁一切商业用途\n关注本工具的最新动态，请移步本项目的github").pack()
+    Label(dialog, text="2020.12.30——一些小修改").pack()
     Button(dialog, text=' 移步github', command=lambda: click_about("https://github.com/AriaPokotengYe/SEU-NewSystem-catcher")).pack(pady=5)
     Button(dialog, text='   已 阅   ', command=lambda: dialog.destroy()).pack(pady=5)
 
@@ -673,6 +722,7 @@ def item_selected(args):
     global list_science_selecting
     global list_economics_selecting
     global list_sports_selecting
+    global list_running
     # 获取对应课程条目的选课id
     if index_tab == 0:
         id_selected = list_recommend[index - 1]['teachingClassID']
@@ -724,6 +774,10 @@ def item_selected(args):
             btn_catch_specific.config(state='normal')
             btn_stop_specific.config(state='disabled')
 
+    if index_tab == 5:
+        btn_catch_specific.config(state='normal')
+        btn_stop_specific.config(state='disabled')
+
     if index - 1<0:
         btn_stop_specific.config(state='disabled')
         btn_catch_specific.config(state='disabled')
@@ -757,7 +811,12 @@ def select_worker(typo,current_list_selecting,current_list):
             for i in range(0, current_list.__len__()):
                 for j in range(0, current_list_selecting.__len__()):
                     if current_list[i]['teachingClassID'] in current_list_selecting and current_list[i]['isFull'] == '0' and current_list[i]['isConflict'] == '0':
-                        doVolunteer(current_list[i]['teachingClassID'], 'TJKC', typo)
+                        data=str(current_list[i]['courseName'])+" "+str(current_list[i]['teacherName'])+" "+str(current_list[i]['teachingPlace'])
+                        doVolunteer(current_list[i]['teachingClassID'], 'TJKC', typo, data)
+                        if data not in list_running:
+                            listbox6.insert(END,data)
+                            print(data)
+                            list_running.append(data)
                         print(current_list[i]['courseName'] + "未满且不冲突，正在发送选课请求")
 
         if typo == 1:
@@ -770,7 +829,12 @@ def select_worker(typo,current_list_selecting,current_list):
             for i in range(0, current_list.__len__()):
                 for j in range(0, current_list_selecting.__len__()):
                     if current_list[i]['teachingClassID'] in current_list_selecting and current_list[i]['isFull'] == '0' and current_list[i]['isConflict'] == '0':
-                        doVolunteer(current_list[i]['teachingClassID'], 'XGXK', typo)
+                        data=str(current_list[i]['courseName'])+" "+str(current_list[i]['teacherName'])+" "+str(current_list[i]['teachingPlace'])
+                        doVolunteer(current_list[i]['teachingClassID'], 'XGXK', typo, data)
+                        if data not in list_running:
+                            listbox6.insert(END,data)
+                            print(data)
+                            list_running.append(data)
                         print(current_list[i]['courseName'] + "未满且不冲突，正在发送选课请求")
 
         if typo == 2:
@@ -783,7 +847,12 @@ def select_worker(typo,current_list_selecting,current_list):
             for i in range(0, current_list.__len__()):
                 for j in range(0, current_list_selecting.__len__()):
                     if current_list[i]['teachingClassID'] in current_list_selecting and current_list[i]['isFull'] == '0' and current_list[i]['isConflict'] == '0':
-                        doVolunteer(current_list[i]['teachingClassID'], 'XGXK', typo)
+                        data=str(current_list[i]['courseName'])+" "+str(current_list[i]['teacherName'])+" "+str(current_list[i]['teachingPlace'])
+                        doVolunteer(current_list[i]['teachingClassID'], 'XGXK', typo, data)
+                        if data not in list_running:
+                            listbox6.insert(END,data)
+                            print(data)
+                            list_running.append(data)
                         print(current_list[i]['courseName'] + "未满且不冲突，正在发送选课请求")
 
         if typo == 3:
@@ -796,7 +865,12 @@ def select_worker(typo,current_list_selecting,current_list):
             for i in range(0, current_list.__len__()):
                 for j in range(0, current_list_selecting.__len__()):
                     if current_list[i]['teachingClassID'] in current_list_selecting and current_list[i]['isFull'] == '0' and current_list[i]['isConflict'] == '0':
-                        doVolunteer(current_list[i]['teachingClassID'], 'XGXK', typo)
+                        data=str(current_list[i]['courseName'])+" "+str(current_list[i]['teacherName'])+" "+str(current_list[i]['teachingPlace'])
+                        doVolunteer(current_list[i]['teachingClassID'], 'XGXK', typo, data)
+                        if data not in list_running:
+                            listbox6.insert(END,data)
+                            print(data)
+                            list_running.append(data)
                         print(current_list[i]['courseName'] + "未满且不冲突，正在发送选课请求")
 
         if typo == 4:
@@ -809,7 +883,12 @@ def select_worker(typo,current_list_selecting,current_list):
             for i in range(0, current_list.__len__()):
                 for j in range(0, current_list_selecting.__len__()):
                     if current_list[i]['teachingClassID'] in current_list_selecting and current_list[i]['isFull'] == '0' and current_list[i]['isConflict'] == '0':
-                        doVolunteer(current_list[i]['teachingClassID'], 'TYKC', typo)
+                        data=str(current_list[i]['courseName'])+" "+str(current_list[i]['teacherName'])+" "+str(current_list[i]['teachingPlace'])
+                        doVolunteer(current_list[i]['teachingClassID'], 'TYKC', typo, data)
+                        if data not in list_running:
+                            listbox6.insert(END,data)
+                            print(data)
+                            list_running.append(data)
                         print(current_list[i]['courseName'] + "未满且不冲突，正在发送选课请求")
         times += 1
 
@@ -824,7 +903,7 @@ def catch_specific():
     global list_science
     global list_economics
     global list_sports
-
+    global listbox6
     global recommend_thread_working
     global humanity_thread_working
     global science_thread_working
@@ -849,6 +928,7 @@ def catch_specific():
         print("推荐课程加入正在选取列表")
         if recommend_thread_working == 1:
             recommend_thread_working = 0
+            data=str(list_recommend[selected - 1]['courseName'])+" "+str(list_recommend[selected - 1]['teacherName'])+" "+str(list_recommend[selected - 1]['teachingPlace'])
             thread_recommend = threading.Thread(target=select_worker, args=(0,list_recommend_selecting,list_recommend))
             thread_recommend.start()
             #thread_recommend.join()
@@ -861,6 +941,7 @@ def catch_specific():
         print("人文课程加入正在选取列表")
         if humanity_thread_working == 1:
             humanity_thread_working = 0
+            data=str(list_humanity[selected - 1]['courseName'])+" "+str(list_humanity[selected - 1]['teacherName'])+" "+str(list_humanity[selected - 1]['teachingPlace'])
             thread_humanity = threading.Thread(target=select_worker, args=(1,list_humanity_selecting,list_humanity))
             thread_humanity.start()
             #thread_humanity.join()
@@ -873,6 +954,7 @@ def catch_specific():
         print("自然科学课程加入正在选取列表")
         if science_thread_working == 1:
             science_thread_working = 0
+            data=str(list_science[selected - 1]['courseName'])+" "+str(list_science[selected - 1]['teacherName'])+" "+str(list_science[selected - 1]['teachingPlace'])
             thread_science = threading.Thread(target=select_worker, args=(2, list_science_selecting, list_science))
             thread_science.start()
             #thread_science.join()
@@ -885,6 +967,7 @@ def catch_specific():
         print("经济课程加入正在选取列表")
         if economics_thread_working == 1:
             economics_thread_working = 0
+            data=str(list_economics[selected - 1]['courseName'])+" "+str(list_economics[selected - 1]['teacherName'])+" "+str(list_economics[selected - 1]['teachingPlace'])
             thread_economics = threading.Thread(target=select_worker, args=(3, list_economics_selecting, list_economics))
             thread_economics.start()
             #thread_economics.join()
@@ -896,10 +979,10 @@ def catch_specific():
         print("体育课程加入正在选取列表")
         if sports_thread_working == 1:
             sports_thread_working = 0
+            data=str(list_sports[selected - 1]['courseName'])+" "+str(list_sports[selected - 1]['teacherName'])+" "+str(list_sports[selected - 1]['teachingPlace'])
             thread_sports = threading.Thread(target=select_worker, args=(4, list_sports_selecting, list_sports))
             thread_sports.start()
             #thread_sports.join()
-
     # 将按钮状态更新
     btn_stop_specific.config(state='normal')
     btn_catch_specific.config(state='disabled')
@@ -911,6 +994,8 @@ def stop_specific():
     global science_thread_working
     global economics_thread_working
     global sports_thread_working
+    global list_running
+    global listbox6
     index_tab = tabs.index(tabs.select())
     # print 'selected page is '+str(index_tab)
     # print 'selected item is ' + str(selected)
@@ -919,7 +1004,12 @@ def stop_specific():
     if index_tab == 0:
         selected = int(listbox1.curselection()[0])
         id_selected = list_recommend[selected - 1]['teachingClassID']
+        data = str(list_recommend[selected - 1]['courseName'])+" "+str(list_recommend[selected - 1]['teacherName'])+" "+str(list_recommend[selected - 1]['teachingPlace'])
         list_recommend_selecting.remove(id_selected)
+        list_running.remove(data)
+        for idx in range(listbox6.size()):
+            if listbox6.get(idx) == data:
+                listbox6.delete(idx)
         if len(list_recommend_selecting) == 0:
             # 待选列表已空
             # 线程自动停止
@@ -927,7 +1017,12 @@ def stop_specific():
     if index_tab == 1:
         selected = int(listbox2.curselection()[0])
         id_selected = list_humanity[selected - 1]['teachingClassID']
+        data = str(list_humanity[selected - 1]['courseName'])+" "+str(list_humanity[selected - 1]['teacherName'])+" "+str(list_humanity[selected - 1]['teachingPlace'])
         list_humanity_selecting.remove(id_selected)
+        list_running.remove(data)
+        for idx in range(listbox6.size()):
+            if listbox6.get(idx) == data:
+                listbox6.delete(idx)
         if len(list_humanity_selecting) == 0:
             # 待选列表已空
             # 线程自动停止
@@ -935,7 +1030,12 @@ def stop_specific():
     if index_tab == 2:
         selected = int(listbox3.curselection()[0])
         id_selected = list_science[selected - 1]['teachingClassID']
+        data = str(list_science[selected - 1]['courseName'])+" "+str(list_science[selected - 1]['teacherName'])+" "+str(list_science[selected - 1]['teachingPlace'])
         list_science_selecting.remove(id_selected)
+        list_running.remove(data)
+        for idx in range(listbox6.size()):
+            if listbox6.get(idx) == data:
+                listbox6.delete(idx)
         if len(list_science_selecting) == 0:
             # 待选列表已空
             # 线程自动停止
@@ -943,7 +1043,12 @@ def stop_specific():
     if index_tab == 3:
         selected = int(listbox4.curselection()[0])
         id_selected = list_economics[selected - 1]['teachingClassID']
+        data = str(list_economics[selected - 1]['courseName'])+" "+str(list_economics[selected - 1]['teacherName'])+" "+str(list_economics[selected - 1]['teachingPlace'])
         list_economics_selecting.remove(id_selected)
+        list_running.remove(data)
+        for idx in range(listbox6.size()):
+            if listbox6.get(idx) == data:
+                listbox6.delete(idx)
         if len(list_economics_selecting) == 0:
             # 待选列表已空
             # 线程自动停止
@@ -951,7 +1056,12 @@ def stop_specific():
     if index_tab == 4:
         selected = int(listbox5.curselection()[0])
         id_selected = list_sports[selected - 1]['teachingClassID']
+        data = str(list_sports[selected - 1]['courseName'])+" "+str(list_sports[selected - 1]['teacherName'])+" "+str(list_sports[selected - 1]['teachingPlace'])
         list_sports_selecting.remove(id_selected)
+        list_running.remove(data)
+        for idx in range(listbox6.size()):
+            if listbox6.get(idx) == data:
+                listbox6.delete(idx)
         if len(list_sports_selecting) == 0:
             # 待选列表已空
             # 线程自动停止
@@ -979,7 +1089,7 @@ def stop_thread(thread):
    print("线程中止函数正在调用")
 
 #发送选课请求的函数（未完成，需要测试一下返回结果，并且对应决定是否结束线程）
-def doVolunteer(teachingClassId,teachingClassType,typo):
+def doVolunteer(teachingClassId,teachingClassType,typo,data):
     global username
     global electiveBatchCode
     global headerNum
@@ -990,7 +1100,8 @@ def doVolunteer(teachingClassId,teachingClassType,typo):
     global science_thread_working
     global economics_thread_working
     global sports_thread_working
-
+    global listbox6
+    global list_running
     # 五类课程的工作线程
     global thread_recommend
     global thread_humanity
@@ -1054,7 +1165,6 @@ def doVolunteer(teachingClassId,teachingClassType,typo):
         stop_thread(thread_humanity)
 
     if result and typo == 2:
-        print("*****")
         pool3.insert(END, "自然科学课程刷课结束")
         pool3.insert(END, "成功选择！")
         root.event_generate("<<SELECT_SUCCESS>>")
@@ -1074,6 +1184,13 @@ def doVolunteer(teachingClassId,teachingClassType,typo):
         root.event_generate("<<SELECT_SUCCESS>>")
         sports_thread_working = 1
         stop_thread(thread_sports)
+        
+    if result:
+        for idx in range(listbox6.size()):
+            if listbox6.get(idx) == data:
+                listbox6.delete(idx)
+        list_running.remove(data)
+
 
 
 #【停止所有】，直接清空所选列表
@@ -1125,17 +1242,13 @@ def stop_all():
         stop_thread(thread_sports)
 
 #老系统查询选课结果界面，新系统无法使用
-def check_table():
+#已加入的课程列表
+def check_course_list():
     global username
-    # dialog = Toplevel(root)
-    # dialog.geometry('240x100+360+300')
-    # dialog.title('请输入学期')
-    # Label(dialog, text="老系统的接口，新系统用不了\n例如，在下面的输入框中输入：16-17-2").pack()
-    # v = StringVar()
-    # Entry(dialog,textvariable=v).pack(pady=5)
-    # Button(dialog, text=' 查看课表 ', command=lambda: webbrowser.open_new(r"http://xk.urp.seu.edu.cn/jw_s"
-    #                                                                   r"ervice/service/stuCurriculum.action?queryStudentId=" + str(
-    #     username) + "&queryAcademicYear=" + v.get())).pack(pady=5)
+    dialog = Toplevel(root)
+    dialog.title('课表')
+    Button(dialog, text=' 查看课表 ', command=lambda: webbrowser.open_new(r"http://newxk.urp.seu.edu.cn//xsxkapp/sys/xsxkapp/*default/curriculum.do" ).pack(pady=5))
+
 
 if __name__ == "__main__":
     #global dlg
@@ -1176,6 +1289,10 @@ if __name__ == "__main__":
     page_seminar = ttk.Frame(tabs)
     listbox5 = Listbox(page_seminar)
 
+    page_running = ttk.Frame(tabs)
+    listbox6 = Listbox(page_running)
+
+
 
 
     #读完课程，更新拉取到的所有课程
@@ -1208,17 +1325,23 @@ if __name__ == "__main__":
     listbox5.bind('<<ListboxSelect>>', item_selected)
     listbox5.pack(fill=BOTH)
 
+    listbox6.bind('<<ListboxSelect>>', item_selected)
+    listbox6.pack(fill=BOTH)
+
     mainLabel = Label(frame0, text="如果本页面空白，请确认批次码正确性，并尝试重新登陆")
     mainLabel.config(font=('times', 20, 'bold'))
     mainLabel.pack(side=LEFT, padx=5)
 
+    #btn_join_specific = Button(frame, text='加入所选', command=join_specific)
     btn_catch_specific = Button(frame, text='开始所选', command=catch_specific)
     btn_stop_specific = Button(frame, text='停止所选', command=stop_specific)
     btn_stop_all = Button(frame, text='停止所有', command=stop_all)
-    btn_table = Button(frame, text='查看课表', command=check_table)
+    btn_table = Button(frame, text='查看所选', command=check_course_list)
     btn_about = Button(frame, text='关于', command=about)
 
     btn_catch_specific.pack(side=LEFT, padx=5)
+    #btn_join_specific.pack(side=LEFT, padx=5)
+    #btn_join_specific.config(state='disabled')
     btn_catch_specific.config(state='disabled')
     btn_stop_specific.pack(side=LEFT, padx=5)
     btn_stop_specific.config(state='disabled')
@@ -1232,6 +1355,8 @@ if __name__ == "__main__":
     tabs.add(page_science,text='自然科学通选课程')
     tabs.add(page_economics, text='经济管理通选课程')
     tabs.add(page_seminar, text='体育课程')
+    tabs.add(page_running, text='线程中的课程')
+
     tabs.pack(side=BOTTOM, expand=1, fill=BOTH, padx=10, pady=10)
 
     group1 = LabelFrame(frame3, text="系统推荐", padx=5, pady=5)
@@ -1258,6 +1383,9 @@ if __name__ == "__main__":
     group5.pack(side=LEFT, padx=10, pady=10)
     pool5 = Listbox(group5, bg='black', fg='green')
     pool5.pack()
+
+    group6 = LabelFrame(frame3, text="进程中的课程", padx=5, pady=5)
+    group6.pack(side=LEFT, padx=10, pady=10)
 
     frame0.pack(padx=5, pady=5)
     frame.pack(fill=X, padx=5, pady=5)
